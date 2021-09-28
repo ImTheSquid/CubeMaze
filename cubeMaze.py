@@ -47,7 +47,8 @@ y_trailing_edge = [
     [23], [17, 12, 9, 6], [15]
 ]
 
-# Determines which edges connect to eachother along with orientation information (axis and direction to next plane as well as 's' to determine whether axes switch and 'i' to determine if an inversion is needed)
+# Determines which edges connect to eachother along with orientation information 
+# (axis and direction to next plane as well as 's' to determine whether axes switch and 'i' to determine if an inversion is needed (which also flips the sign on a reverse traversal)
 maze_edge_maps = [
     (1, 4, "y+i"), 
     (2, 3, "x+si"), 
@@ -133,12 +134,12 @@ def parse_edge_effect(edge):
         elif edge == map[1]: # Reverse everything if edge is second
             res[1] = "s" in map[2]
             res[2] = "i" in map[2]
+            sign = "-" if "i" in map[2] else "+"
             # Make sure the target axis is switched if needed since this is the reverse relation
-            if ("x" in map[2] and not res[1]) or ("y" in map[2] and res[1]):
-                res[0] = Direction.LEFT if "+" in map[2] else Direction.RIGHT
-            else:
-                # Swap the sign because UP reduces y instead of increasing it
-                res[0] = Direction.DOWN if "-" in map[2] else Direction.UP
+            if ("x" in map[2] and not res[1]) or ("y" in map[2] and res[1]): # Normal X transistion or swapped Y transition
+                res[0] = Direction.LEFT if sign in map[2] else Direction.RIGHT
+            else: # Swapped X transition or normal Y transition
+                res[0] = Direction.DOWN if sign in map[2] else Direction.UP
             return res
 
     return None
