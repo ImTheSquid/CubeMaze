@@ -1,5 +1,5 @@
-import pyglet
 from enum import Enum
+import random
 
 """
 Cube Edge Layout:
@@ -16,17 +16,21 @@ Cube Edge Layout:
 
 side_length = 8
 
+def get_first_point():
+    return (int(side_length * 1.5), int(side_length * 1.5))
+
 # Sanity check
 if side_length == 0:
     exit(1)
 
 # Allows for creation of the cube maze by excluding parts that are irrelevant (x, y)
-maze_exclusion_ranges = [
-    (range(0, side_length), range(0, side_length)), 
-    (range(side_length * 2, side_length * 4), range(0, side_length)),
-    (range(0, side_length), range(side_length * 2, side_length * 3)), 
-    (range(side_length * 2, side_length * 4), range(side_length * 2, side_length * 3))
-]
+def maze_exclusion_ranges():
+    return [
+        (range(0, side_length), range(0, side_length)), 
+        (range(side_length * 2, side_length * 4), range(0, side_length)),
+        (range(0, side_length), range(side_length * 2, side_length * 3)), 
+        (range(side_length * 2, side_length * 4), range(side_length * 2, side_length * 3))
+    ]
 
 # Determines the x/y values that determine edges and their pairs
 # If a edge set has more than one item, the other axis / side length should be used to determine the correct index
@@ -58,8 +62,6 @@ maze_edge_maps = [
     (22, 23, "y+"), 
     (11, 10, "x+")
 ]
-
-maze = [[]]
 
 # Finds an edge's partner if it exists, returns None otherwise
 def find_next_edge(edge):
@@ -109,6 +111,12 @@ class Direction(Enum):
     DOWN = 2
     LEFT = 3
 
+    def opposite(self):
+        if self.value < 2:
+            return Direction(self.value + 2)
+        else:
+            return Direction(self.value - 2)
+
 
 # Determines what happens when an edge crossing occurs, returns the effected direction and whether an axis flip is needed
 def parse_edge_effect(edge):
@@ -119,16 +127,18 @@ def parse_edge_effect(edge):
             res[2] = "i" in map[2]
             if "x" in map[2]:
                 res[0] = Direction.RIGHT if "+" in map[2] else Direction.LEFT
-            elif "y" in map[2]:
+            else:
                 res[0] = Direction.UP if "+" in map[2] else Direction.DOWN
             return res
-        elif edge == map[1]:
+        elif edge == map[1]: # Reverse everything if edge is second
             res[1] = "s" in map[2]
             res[2] = "i" in map[2]
-            if "x" in map[2]:
+            # Make sure the target axis is switched if needed since this is the reverse relation
+            if ("x" in map[2] and not res[1]) or ("y" in map[2] and res[1]):
                 res[0] = Direction.LEFT if "+" in map[2] else Direction.RIGHT
-            elif "y" in map[2]:
-                res[0] = Direction.DOWN if "+" in map[2] else Direction.UP
+            else:
+                # Swap the sign because UP reduces y instead of increasing it
+                res[0] = Direction.DOWN if "-" in map[2] else Direction.UP
             return res
 
     return None
@@ -202,24 +212,86 @@ def next_cell(x, y, direction):
     return (x + direction_values[direction.value][0], y + direction_values[direction.value][1])
 
 
-# Gets a cell's cardinal neighbors
-def neighbors(x, y):
-    pass
+# Gets a cell's cardinal wall neighbors
+def wall_neighbors(x, y, maze):
+    return list(filter(lambda cell: maze[cell[0]][cell[1]] == "W", [next_cell(x, y, d) for d in Direction]))
+
+
+# Checks if the cell has front diagonal neighbors by assuming that the cell only has one cardinal passage
+def has_front_diagonal_neighbors(x, y, maze):
+    for d in Direction:
+        next = next_cell(x, y, d)
+        if maze[next[0]][next[1]] == "P":
+            back_direction = d
+            break
+    
+    direction = back_direction.opposite()
+    forward_cell = next_cell(x, y, direction)
+    for_x, for_y = forward_cell
+
+    if direction.value % 2 == 0:
+        first, second = next_cell(for_x, for_y, Direction.LEFT), next_cell(for_x, for_y, Direction.RIGHT)
+    else:
+        first, second = next_cell(for_x, for_y, Direction.UP), next_cell(for_x, for_y, Direction.DOWN)
+    return maze[first[0]][first[1]] == "P" or maze[second[0]][second[1]] == "P"
+
+
+# Checks if a wall can become a passage
+def wall_can_become_passage(x, y, maze):
+    # If 3 of the cell's neighbors are walls, that means the fourth is a passage and therefore the wall can become a passage
+    return len(wall_neighbors(x, y, maze)) == 3 and not has_front_diagonal_neighbors(x, y, maze)
 
 
 # Tests whether a point is in the exclusion ranges
 def point_is_excluded(x, y):
-    for range in maze_exclusion_ranges:
+    for range in maze_exclusion_ranges():
         if x in range[0] and y in range[1]:
             return True
     return False
 
 
 # Generates the initial maze, W -> wall, P -> passage
-def fill_initial_maze():
-    global maze
-    maze = [["W" if not point_is_excluded(x, y) else None for y in range(0, side_length * 3)] for x in range(0, side_length * 4)]
+def fill_initial_maze(side):
+    global side_length
+    side_length = side
+    print(f"Maze generated with size {side_length * 3}x{side_length * 4}")
+    return [["W" if not point_is_excluded(x, y) else None for y in range(0, side_length * 3)] for x in range(0, side_length * 4)]
 
 
-fill_initial_maze()
-print(next_cell(0, 8, Direction.LEFT))
+# Run Prim's algorithm, returns whether or not generation can continue as well as last generated cell
+def step_generator(maze, walls, last_generated_cell):
+    if len(maze) == 0:
+        print("Maze not generated yet!")
+        return (False, None)
+
+    if len(walls) == 0:
+        if last_generated_cell is None: # If maze doesn't have any walls but is generated, use the first point
+            first_point = get_first_point()
+            maze[first_point[0]][first_point[1]] = "P"
+            walls += wall_neighbors(first_point[0], first_point[1], maze)
+            return (True, first_point)
+        else:
+            return (False, last_generated_cell)
+
+    selected_wall = random.choice(walls)
+    if wall_can_become_passage(selected_wall[0], selected_wall[1], maze):
+        last_generated_cell = selected_wall
+        maze[selected_wall[0]][selected_wall[1]] = "P"
+        walls += wall_neighbors(selected_wall[0], selected_wall[1], maze)
+
+    walls.remove(selected_wall)
+    return (len(walls) > 0, last_generated_cell)
+
+
+# BEGIN SHOW CODE
+"""with open('testfile.txt', 'w') as f:
+    for x in range(0, side_length * 4):
+        for y in range(0, side_length * 3):
+            if not point_is_excluded(x, y):
+                for d in Direction:
+                    x2, y2 = next_cell(x, y, d)
+                    res = f'The cell in direction {d.name} from ({x}, {y}) is ({x2}, {y2})'
+                    if point_is_excluded(x2, y2) or x2 > 31 or y2 > 23:
+                        res += ' ERROR!'
+                    f.write(f'{res}\n')"""
+print(next_cell(8, 8, Direction.UP))
