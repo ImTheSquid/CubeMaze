@@ -295,4 +295,3 @@ def step_generator(maze, walls, last_generated_cell):
                     if point_is_excluded(x2, y2) or x2 > 31 or y2 > 23:
                         res += ' ERROR!'
                     f.write(f'{res}\n')"""
-print(next_cell(8, 8, Direction.UP))

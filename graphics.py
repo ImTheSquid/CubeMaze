@@ -1,6 +1,14 @@
 import pyglet
 from pyglet.window import key
 import cubeMaze
+import argparse
+
+parser = argparse.ArgumentParser(description="Generates a cube maze with faces of a certain side length.")
+parser.add_argument("side", metavar="s", type=int, help="Side length of each face of the maze")
+args = parser.parse_args()
+if args.side <= 0:
+    print("Invalid side length")
+    exit(1)
 
 window = pyglet.window.Window(resizable=True)
 window.width = 640
@@ -78,4 +86,5 @@ def run(side):
     print(f"Rendering maze with side length {side_length} and cell x {cell_x} and cell y {cell_y}")
     pyglet.app.run()
 
-run(8)
+
+run(args.side)
